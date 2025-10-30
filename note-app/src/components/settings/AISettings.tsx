@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useAppStore } from '../../stores/useAppStore';
 import { testConnection } from '../../lib/aiService';
-import { Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 
 export function AISettings() {
   const { aiSettings, setAPIKey, setAIModel, toggleAI } = useAppStore();
   const [showKey, setShowKey] = useState(false);
-  const [localKey, setLocalKey] = useState(aiSettings.apiKey || '');
+  const [localKey, setLocalKey] = useState(aiSettings.apiKey ?? '');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
 
@@ -31,12 +31,12 @@ export function AISettings() {
     try {
       const success = await testConnection();
       setTestResult(success ? 'success' : 'error');
-    } catch (error) {
+    } catch {
       setTestResult('error');
     } finally {
       // Restore original key if test failed
       if (testResult === 'error' && originalKey !== localKey.trim()) {
-        setAPIKey(originalKey);
+        setAPIKey(originalKey ?? '');
       }
       setTesting(false);
     }
@@ -71,6 +71,29 @@ export function AISettings() {
             }`}
           />
         </button>
+      </div>
+
+      {/* Security Warning */}
+      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+        <div className="flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
+          <div className="space-y-2">
+            <h4 className="font-medium text-yellow-900 dark:text-yellow-100">
+              Security Notice: API Key Storage
+            </h4>
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              Your API key is stored in plain text in your browser's local storage. This means:
+            </p>
+            <ul className="text-sm text-yellow-800 dark:text-yellow-200 space-y-1 ml-4">
+              <li>• Any malicious script or browser extension could potentially access it</li>
+              <li>• The key is visible in browser DevTools</li>
+              <li>• It's not encrypted or protected</li>
+            </ul>
+            <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+              Recommended: Use an API key with usage limits and monitor your OpenAI usage regularly.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* API Key Input */}
@@ -179,12 +202,24 @@ export function AISettings() {
 
       {/* Privacy Notice */}
       <div className="p-4 bg-muted/50 border border-border rounded-lg">
-        <h4 className="font-medium mb-2">Privacy & Security</h4>
+        <h4 className="font-medium mb-2">Privacy & Data Handling</h4>
         <ul className="text-sm text-muted-foreground space-y-1">
-          <li>• Your API key is stored locally in your browser</li>
-          <li>• Note content is sent to OpenAI for processing</li>
-          <li>• OpenAI may temporarily store data for abuse prevention</li>
-          <li>• Consider using API keys with usage limits for added security</li>
+          <li>• Selected note content is sent to OpenAI for processing</li>
+          <li>• OpenAI may temporarily store data according to their privacy policy</li>
+          <li>• Do not use AI features on highly sensitive or confidential information</li>
+          <li>• Rate limit: 10 AI requests per minute to prevent abuse</li>
+        </ul>
+      </div>
+
+      {/* Best Practices */}
+      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Security Best Practices</h4>
+        <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+          <li>• Create a dedicated API key for this app (not your main key)</li>
+          <li>• Set monthly spending limits in your OpenAI account</li>
+          <li>• Monitor your API usage at platform.openai.com/usage</li>
+          <li>• Rotate your API key periodically</li>
+          <li>• If you suspect your key is compromised, revoke it immediately</li>
         </ul>
       </div>
     </div>

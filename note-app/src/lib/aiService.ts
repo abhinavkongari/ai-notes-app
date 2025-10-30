@@ -1,14 +1,12 @@
 import OpenAI from 'openai';
+import { validateAIInput } from './validation.js';
+import { aiRateLimiter } from './rateLimit.js';
+import { logger } from './logger.js';
 
-// Get API key from store or environment
+// Get API key from localStorage (user settings only)
 function getAPIKey(): string {
-  // First check localStorage (user settings)
   const stored = localStorage.getItem('ai-api-key');
   if (stored) return stored;
-
-  // Fallback to environment variable for development
-  const envKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (envKey) return envKey;
 
   throw new Error('NO_API_KEY');
 }
@@ -23,7 +21,7 @@ function getClient(): OpenAI {
 }
 
 export interface AIError {
-  code: 'NO_API_KEY' | 'NETWORK_ERROR' | 'INVALID_API_KEY' | 'RATE_LIMIT' | 'UNKNOWN';
+  code: 'NO_API_KEY' | 'NETWORK_ERROR' | 'INVALID_API_KEY' | 'RATE_LIMIT' | 'VALIDATION_ERROR' | 'UNKNOWN';
   message: string;
   originalError?: unknown;
 }
@@ -35,6 +33,23 @@ async function callAI(
   options?: { model?: string; maxTokens?: number }
 ): Promise<string> {
   try {
+    // Validate input
+    validateAIInput(prompt);
+
+    // Check rate limit
+    if (!aiRateLimiter.canMakeRequest()) {
+      const resetTime = aiRateLimiter.getResetTime();
+      const timeString = resetTime ? resetTime.toLocaleTimeString() : 'soon';
+      const aiError: AIError = {
+        code: 'RATE_LIMIT',
+        message: `Rate limit exceeded. Please try again at ${timeString}. (10 requests per minute)`,
+      };
+      throw aiError;
+    }
+
+    // Record request for rate limiting
+    aiRateLimiter.recordRequest();
+
     const client = getClient();
     const model = options?.model || 'gpt-4o-mini';
     const maxTokens = options?.maxTokens || 500;
@@ -55,9 +70,33 @@ async function callAI(
     }
 
     return content.trim();
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as { code?: string; message?: string; status?: number };
+
+    // Handle validation errors
+    if (err.code === 'EMPTY_INPUT' || err.code === 'TOO_LONG' || err.code === 'SUSPICIOUS_PATTERN') {
+      logger.warn('AI input validation failed', {
+        errorCode: err.code,
+        errorMessage: err.message,
+      });
+      const aiError: AIError = {
+        code: 'VALIDATION_ERROR',
+        message: err.message || 'Validation error',
+        originalError: error,
+      };
+      throw aiError;
+    }
+
+    // Handle rate limit errors (from our rate limiter)
+    if (err.code === 'RATE_LIMIT') {
+      logger.warn('AI rate limit exceeded', {
+        message: err.message,
+      });
+      throw error; // Already properly formatted
+    }
     // Transform errors into our standard format
-    if (error.message === 'NO_API_KEY') {
+    if (err.message === 'NO_API_KEY') {
+      logger.error('AI service called without API key');
       const aiError: AIError = {
         code: 'NO_API_KEY',
         message: 'No API key found. Please add your OpenAI API key in settings.',
@@ -66,7 +105,11 @@ async function callAI(
       throw aiError;
     }
 
-    if (error.code === 'ENOTFOUND' || error.message?.includes('network')) {
+    if (err.code === 'ENOTFOUND' || err.message?.includes('network')) {
+      logger.error('AI service network error', {
+        errorCode: err.code,
+        errorMessage: err.message,
+      });
       const aiError: AIError = {
         code: 'NETWORK_ERROR',
         message: 'Network error. Please check your internet connection.',
@@ -75,7 +118,11 @@ async function callAI(
       throw aiError;
     }
 
-    if (error.status === 401 || error.message?.includes('API key')) {
+    if (err.status === 401 || err.message?.includes('API key')) {
+      logger.security('Invalid API key used', {
+        errorStatus: err.status,
+        errorMessage: err.message,
+      });
       const aiError: AIError = {
         code: 'INVALID_API_KEY',
         message: 'Invalid API key. Please check your key in settings.',
@@ -84,7 +131,11 @@ async function callAI(
       throw aiError;
     }
 
-    if (error.status === 429) {
+    if (err.status === 429) {
+      logger.warn('OpenAI API rate limit hit', {
+        errorStatus: err.status,
+        errorMessage: err.message,
+      });
       const aiError: AIError = {
         code: 'RATE_LIMIT',
         message: 'Rate limit exceeded. Please try again later.',
@@ -94,9 +145,14 @@ async function callAI(
     }
 
     // Unknown error
+    logger.error('Unexpected AI service error', {
+      errorMessage: err.message,
+      errorStatus: err.status,
+      errorCode: err.code,
+    });
     const aiError: AIError = {
       code: 'UNKNOWN',
-      message: error.message || 'An unexpected error occurred.',
+      message: err.message || 'An unexpected error occurred.',
       originalError: error,
     };
     throw aiError;
@@ -190,7 +246,7 @@ export async function testConnection(): Promise<boolean> {
   try {
     await callAI('Hello', 'Respond with just "OK"', { maxTokens: 10 });
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }

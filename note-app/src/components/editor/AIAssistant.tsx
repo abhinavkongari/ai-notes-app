@@ -80,7 +80,10 @@ export function AIAssistant({ editor }: AIAssistantProps) {
           toast.error('Network error. Please check your connection.');
           break;
         case 'RATE_LIMIT':
-          toast.error('Rate limit exceeded. Please try again later.');
+          toast.error(aiError.message || 'Rate limit exceeded. Please try again later.');
+          break;
+        case 'VALIDATION_ERROR':
+          toast.error(aiError.message || 'Invalid input. Please check your selection.');
           break;
         default:
           toast.error(aiError.message || 'An error occurred. Please try again.');

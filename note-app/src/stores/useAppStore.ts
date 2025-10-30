@@ -31,16 +31,38 @@ interface AppStore extends AppState {
   toggleTheme: () => void;
 
   // AI actions
-  setAPIKey: (apiKey: string) => void;
+  setAPIKey: (apiKey: string | null) => void;
   setAIModel: (model: 'gpt-4o-mini' | 'gpt-4-turbo') => void;
   toggleAI: () => void;
   loadAISettings: () => void;
+
+  // Bulk import/export actions
+  bulkImport: (notes: Note[], folders: Folder[], tags: Tag[]) => Promise<void>;
 
   // Computed getters
   getFilteredNotes: () => Note[];
 }
 
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+/**
+ * Generate a cryptographically secure random ID
+ * Uses Web Crypto API for secure random values
+ */
+const generateId = (): string => {
+  // Use crypto.getRandomValues for secure random generation
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+
+  // Convert to base36 string for readability
+  const randomPart = Array.from(array)
+    .map(b => b.toString(36).padStart(2, '0'))
+    .join('')
+    .substring(0, 16);
+
+  // Add timestamp prefix for sortability (optional but useful)
+  const timestamp = Date.now().toString(36);
+
+  return `${timestamp}-${randomPart}`;
+};
 
 export const useAppStore = create<AppStore>((set, get) => ({
   // Initial state
@@ -298,7 +320,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const model = localStorage.getItem('ai-model') as 'gpt-4o-mini' | 'gpt-4-turbo' | null;
     const enabled = localStorage.getItem('ai-enabled');
 
-    set(state => ({
+    set(() => ({
       aiSettings: {
         apiKey: apiKey || null,
         model: model || 'gpt-4o-mini',
@@ -336,8 +358,39 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     return filtered;
   },
+
+  // Bulk import data (for restore functionality)
+  bulkImport: async (notes, folders, tags) => {
+    // Save all data to IndexedDB
+    await Promise.all([
+      ...notes.map(note => db.saveNote(note)),
+      ...folders.map(folder => db.saveFolder(folder)),
+      ...tags.map(tag => db.saveTag(tag)),
+    ]);
+
+    // Update state
+    set({
+      notes: notes.sort((a, b) => b.updatedAt - a.updatedAt),
+      folders,
+      tags,
+      currentNoteId: notes.length > 0 ? notes[0].id : null,
+    });
+  },
 }));
 
 // Initialize data on app load
 useAppStore.getState().loadData();
 useAppStore.getState().loadAISettings();
+
+// Check for pending import from backup restore
+const pendingImport = localStorage.getItem('import-pending');
+if (pendingImport) {
+  try {
+    const data = JSON.parse(pendingImport);
+    useAppStore.getState().bulkImport(data.notes, data.folders, data.tags);
+    localStorage.removeItem('import-pending');
+  } catch (error) {
+    console.error('Failed to process pending import:', error);
+    localStorage.removeItem('import-pending');
+  }
+}

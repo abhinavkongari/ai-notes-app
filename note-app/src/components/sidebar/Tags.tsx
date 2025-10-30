@@ -1,5 +1,5 @@
 import { useAppStore } from '../../stores/useAppStore.js';
-import { Tag, X } from 'lucide-react';
+import { Tag } from 'lucide-react';
 
 export function Tags() {
   const { tags, notes, selectedTags, toggleTagFilter, clearTagFilters } = useAppStore();

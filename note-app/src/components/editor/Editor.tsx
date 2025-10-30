@@ -5,11 +5,13 @@ import Highlight from '@tiptap/extension-highlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { EditorToolbar } from './EditorToolbar.js';
 import { TagInput } from './TagInput.js';
 import { AIAssistant } from './AIAssistant.js';
 import { useAppStore } from '../../stores/useAppStore.js';
 import { useDebounce } from '../../lib/useDebounce.js';
+import { logger } from '../../lib/logger.js';
 
 export function Editor() {
   const { notes, currentNoteId, updateNote } = useAppStore();
@@ -43,11 +45,42 @@ export function Editor() {
   useEffect(() => {
     if (editor && currentNote) {
       const content = currentNote.content || '';
-      if (editor.getHTML() !== content) {
-        editor.commands.setContent(content);
+
+      // Sanitize HTML content before loading into editor
+      // This provides defense-in-depth against XSS, even though TipTap sanitizes by default
+      const sanitized = DOMPurify.sanitize(content, {
+        ALLOWED_TAGS: [
+          'p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre',
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          'ul', 'ol', 'li',
+          'blockquote',
+          'a', 'img',
+          'table', 'thead', 'tbody', 'tr', 'th', 'td',
+          'mark', 'span', 'div',
+        ],
+        ALLOWED_ATTR: [
+          'href', 'target', 'rel',
+          'src', 'alt', 'title',
+          'class', 'style',
+          'data-type', 'data-checked', // TipTap attributes
+        ],
+        ALLOW_DATA_ATTR: true, // Allow data-* attributes for TipTap
+      });
+
+      // Log if content was sanitized (different from original)
+      if (sanitized !== content && content.length > 0) {
+        logger.security('HTML content sanitized on load', {
+          noteId: currentNote.id,
+          originalLength: content.length,
+          sanitizedLength: sanitized.length,
+        });
+      }
+
+      if (editor.getHTML() !== sanitized) {
+        editor.commands.setContent(sanitized);
       }
     }
-  }, [currentNote?.id, editor]);
+  }, [currentNote?.id, currentNote, editor]);
 
   // Auto-save with debounce
   const debouncedContent = useDebounce(editor?.getHTML() || '', 2000);
