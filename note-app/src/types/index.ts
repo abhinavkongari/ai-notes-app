@@ -39,5 +39,7 @@ export interface AppState {
   selectedFolderId: string | null;
   selectedTags: string[];
   theme: 'light' | 'dark';
+  sidebarVisible: boolean;
+  focusMode: boolean;
   aiSettings: AISettings;
 }

@@ -3,7 +3,7 @@ import type { IDBPDatabase } from 'idb';
 import type { Note, Folder, Tag } from '../types/index.js';
 
 const DB_NAME = 'note-app-db';
-const DB_VERSION = 1;
+const DB_VERSION = 3; // Upgraded to bypass failed v2 migration
 
 let dbInstance: IDBPDatabase | null = null;
 
@@ -117,3 +117,4 @@ export async function searchNotes(query: string): Promise<Note[]> {
     return titleMatch || contentMatch;
   });
 }
+

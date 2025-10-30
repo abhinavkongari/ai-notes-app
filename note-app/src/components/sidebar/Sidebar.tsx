@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../stores/useAppStore.js';
-import { PlusCircle, Moon, Sun, Settings } from 'lucide-react';
+import { PlusCircle, Moon, Sun, Settings, PanelLeftClose } from 'lucide-react';
 import { Search } from './Search.js';
 import { Folders } from './Folders.js';
 import { Tags } from './Tags.js';
@@ -8,7 +8,7 @@ import { NotesList } from './NotesList.js';
 import { SettingsModal } from '../settings/SettingsModal.js';
 
 export function Sidebar() {
-  const { createNote, selectedFolderId, theme, toggleTheme } = useAppStore();
+  const { createNote, selectedFolderId, theme, toggleTheme, toggleSidebar } = useAppStore();
   const [showSettings, setShowSettings] = useState(false);
 
   const handleNewNote = () => {
@@ -21,6 +21,13 @@ export function Sidebar() {
       <div className="p-4 border-b border-border flex items-center justify-between">
         <h1 className="text-xl font-bold">Notes</h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={toggleSidebar}
+            className="p-2 hover:bg-accent rounded transition-colors"
+            title="Hide sidebar (Ctrl+B)"
+          >
+            <PanelLeftClose className="w-5 h-5" />
+          </button>
           <button
             onClick={() => setShowSettings(true)}
             className="p-2 hover:bg-accent rounded transition-colors"
@@ -48,15 +55,12 @@ export function Sidebar() {
       {/* Search */}
       <Search />
 
-      {/* Folders */}
-      <Folders />
-
       {/* Tags */}
       <Tags />
 
-      {/* Notes List */}
-      <div className="flex-1 overflow-hidden border-t border-border mt-2">
-        <NotesList />
+      {/* Folders with inline notes */}
+      <div className="flex-1 overflow-y-auto">
+        <Folders />
       </div>
 
       {/* Settings Modal */}

@@ -1,4 +1,5 @@
 import { Editor } from '@tiptap/react';
+import { useState } from 'react';
 import {
   Bold,
   Italic,
@@ -16,14 +17,37 @@ import {
   Undo,
   Redo,
   Highlighter,
+  Table,
+  Smile,
+  Trash2,
 } from 'lucide-react';
+import { useAppStore } from '../../stores/useAppStore.js';
+import { toast } from 'sonner';
 
 interface EditorToolbarProps {
   editor: Editor | null;
 }
 
+const COMMON_EMOJIS = ['😀', '😂', '❤️', '👍', '🎉', '🔥', '✨', '💡', '📝', '✅', '❌', '⚠️', '📌', '🚀', '💪', '🌟'];
+
 export function EditorToolbar({ editor }: EditorToolbarProps) {
+  const { currentNoteId, deleteNote } = useAppStore();
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
   if (!editor) return null;
+
+  const handleDeleteNote = () => {
+    if (!currentNoteId) return;
+    if (confirm('Are you sure you want to delete this note?')) {
+      deleteNote(currentNoteId);
+      toast.success('Note deleted');
+    }
+  };
+
+  const insertEmoji = (emoji: string) => {
+    editor.chain().focus().insertContent(emoji).run();
+    setShowEmojiPicker(false);
+  };
 
   const ToolbarButton = ({
     onClick,
@@ -161,7 +185,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         </div>
 
         {/* Block elements */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 pr-2 border-r border-border">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             isActive={editor.isActive('blockquote')}
@@ -181,6 +205,51 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             title="Horizontal Rule"
           >
             <Minus className="w-4 h-4" />
+          </ToolbarButton>
+        </div>
+
+        {/* Table */}
+        <div className="flex items-center gap-1 pr-2 border-r border-border">
+          <ToolbarButton
+            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+            title="Insert Table"
+          >
+            <Table className="w-4 h-4" />
+          </ToolbarButton>
+        </div>
+
+        {/* Emoji */}
+        <div className="flex items-center gap-1 pr-2 border-r border-border relative">
+          <ToolbarButton
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            isActive={showEmojiPicker}
+            title="Insert Emoji"
+          >
+            <Smile className="w-4 h-4" />
+          </ToolbarButton>
+          {showEmojiPicker && (
+            <div className="absolute top-full left-0 mt-1 p-2 bg-background border border-border rounded-lg shadow-lg z-50 grid grid-cols-8 gap-1">
+              {COMMON_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => insertEmoji(emoji)}
+                  className="text-xl hover:bg-accent rounded p-1 transition-colors"
+                  title={emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Delete Note */}
+        <div className="flex items-center gap-1 ml-auto">
+          <ToolbarButton
+            onClick={handleDeleteNote}
+            title="Delete Note"
+          >
+            <Trash2 className="w-4 h-4 text-destructive" />
           </ToolbarButton>
         </div>
       </div>

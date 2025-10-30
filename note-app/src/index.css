@@ -133,3 +133,36 @@
 .ProseMirror ul[data-type="taskList"] li > div {
   @apply flex-1;
 }
+
+/* Table Styles */
+.ProseMirror table {
+  @apply border-collapse w-full my-4;
+  table-layout: fixed;
+}
+
+.ProseMirror table td,
+.ProseMirror table th {
+  @apply border border-border px-3 py-2 text-left relative;
+  min-width: 100px;
+}
+
+.ProseMirror table th {
+  @apply bg-muted font-semibold;
+}
+
+.ProseMirror table td {
+  @apply bg-background;
+}
+
+.ProseMirror table .selectedCell {
+  @apply bg-accent;
+}
+
+.ProseMirror table .column-resize-handle {
+  @apply absolute right-0 top-0 bottom-0 w-1 bg-primary cursor-col-resize;
+  pointer-events: none;
+}
+
+.ProseMirror table .column-resize-handle:hover {
+  @apply bg-primary;
+}

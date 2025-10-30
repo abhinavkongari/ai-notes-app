@@ -30,6 +30,11 @@ interface AppStore extends AppState {
   // Theme actions
   toggleTheme: () => void;
 
+  // UI actions
+  toggleSidebar: () => void;
+  setSidebarVisible: (visible: boolean) => void;
+  toggleFocusMode: () => void;
+
   // AI actions
   setAPIKey: (apiKey: string | null) => void;
   setAIModel: (model: 'gpt-4o-mini' | 'gpt-4-turbo') => void;
@@ -74,6 +79,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectedFolderId: null,
   selectedTags: [],
   theme: 'light',
+  sidebarVisible: true,
+  focusMode: false,
   aiSettings: {
     apiKey: null,
     model: 'gpt-4o-mini',
@@ -285,6 +292,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
   },
 
+  // UI actions
+  toggleSidebar: () => {
+    set(state => {
+      const newVisible = !state.sidebarVisible;
+      localStorage.setItem('sidebar-visible', String(newVisible));
+      return { sidebarVisible: newVisible };
+    });
+  },
+
+  setSidebarVisible: (visible) => {
+    localStorage.setItem('sidebar-visible', String(visible));
+    set({ sidebarVisible: visible });
+  },
+
+  toggleFocusMode: () => {
+    set(state => {
+      const newFocusMode = !state.focusMode;
+      // Focus mode automatically hides sidebar
+      if (newFocusMode) {
+        return { focusMode: true, sidebarVisible: false };
+      } else {
+        return { focusMode: false };
+      }
+    });
+  },
+
   // AI actions
   setAPIKey: (apiKey) => {
     // Save to localStorage for persistence
@@ -381,6 +414,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
 // Initialize data on app load
 useAppStore.getState().loadData();
 useAppStore.getState().loadAISettings();
+
+// Load sidebar visibility preference
+const sidebarVisible = localStorage.getItem('sidebar-visible');
+if (sidebarVisible !== null) {
+  useAppStore.setState({ sidebarVisible: sidebarVisible === 'true' });
+}
 
 // Check for pending import from backup restore
 const pendingImport = localStorage.getItem('import-pending');

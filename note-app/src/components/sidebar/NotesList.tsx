@@ -1,10 +1,13 @@
 import { useAppStore } from '../../stores/useAppStore.js';
 import { FileText, Star, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from '../../lib/dateUtils.js';
+import { useState } from 'react';
 
 export function NotesList() {
   const { currentNoteId, setCurrentNote, deleteNote, updateNote, getFilteredNotes } = useAppStore();
   const filteredNotes = getFilteredNotes();
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteTitle, setEditingNoteTitle] = useState('');
 
   const handleDelete = (e: React.MouseEvent, noteId: string) => {
     e.stopPropagation();
@@ -16,6 +19,35 @@ export function NotesList() {
   const toggleFavorite = (e: React.MouseEvent, noteId: string, isFavorite: boolean) => {
     e.stopPropagation();
     updateNote(noteId, { isFavorite: !isFavorite });
+  };
+
+  const handleStartEdit = (e: React.MouseEvent, noteId: string, noteTitle: string) => {
+    e.stopPropagation();
+    setEditingNoteId(noteId);
+    setEditingNoteTitle(noteTitle);
+  };
+
+  const handleSaveEdit = async (noteId: string, originalTitle: string) => {
+    if (editingNoteTitle.trim() && editingNoteTitle !== originalTitle) {
+      await updateNote(noteId, { title: editingNoteTitle.trim() });
+    }
+    setEditingNoteId(null);
+    setEditingNoteTitle('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingNoteId(null);
+    setEditingNoteTitle('');
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent, noteId: string, originalTitle: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit(noteId, originalTitle);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEdit();
+    }
   };
 
   if (filteredNotes.length === 0) {
@@ -33,16 +65,37 @@ export function NotesList() {
         {filteredNotes.map(note => (
           <div
             key={note.id}
-            onClick={() => setCurrentNote(note.id)}
+            onClick={() => {
+              // Prevent note selection when in edit mode
+              if (editingNoteId !== note.id) {
+                setCurrentNote(note.id);
+              }
+            }}
             className={`p-3 border-b border-border cursor-pointer hover:bg-accent transition-colors ${
               currentNoteId === note.id ? 'bg-accent' : ''
             }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-sm truncate mb-1">
-                  {note.title}
-                </h3>
+                {editingNoteId === note.id ? (
+                  <input
+                    type="text"
+                    value={editingNoteTitle}
+                    onChange={(e) => setEditingNoteTitle(e.target.value)}
+                    onBlur={() => handleSaveEdit(note.id, note.title)}
+                    onKeyDown={(e) => handleEditKeyDown(e, note.id, note.title)}
+                    onClick={(e) => e.stopPropagation()}
+                    autoFocus
+                    className="w-full px-1 py-0 text-sm font-medium border border-border rounded bg-background focus:outline-none focus:ring-2 focus:ring-ring mb-1"
+                  />
+                ) : (
+                  <h3 
+                    className="font-medium text-sm truncate mb-1 cursor-text"
+                    onDoubleClick={(e) => handleStartEdit(e, note.id, note.title)}
+                  >
+                    {note.title}
+                  </h3>
+                )}
                 <p className="text-xs text-muted-foreground mb-2">
                   {formatDistanceToNow(note.updatedAt)}
                 </p>

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Download, Upload, Database, AlertCircle, CheckCircle2, FileJson, Loader2 } from 'lucide-react';
+import { Download, Upload, Database, AlertCircle, CheckCircle2, FileJson, Loader2, FileText } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 import {
   exportAllData,
@@ -11,6 +11,7 @@ import {
   type BackupData,
   type ImportOptions,
 } from '../../lib/backup';
+import { exportNotesAsMarkdown, exportAsJSON } from '../../lib/export';
 import { toast } from 'sonner';
 
 export function DataSettings() {
@@ -176,25 +177,46 @@ export function DataSettings() {
       <div className="space-y-3">
         <h4 className="font-medium">Export Data</h4>
         <p className="text-sm text-muted-foreground">
-          Download all your data as a JSON file. This file can be imported later to restore your data.
+          Download your data as JSON (for backup/restore) or Markdown files (for portability).
         </p>
-        <button
-          onClick={handleExport}
-          disabled={isExporting || stats.noteCount === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isExporting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Exporting...
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              Export All Data
-            </>
-          )}
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={handleExport}
+            disabled={isExporting || stats.noteCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <FileJson className="w-4 h-4" />
+                Export as JSON
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              try {
+                exportNotesAsMarkdown(notes, folders);
+                toast.success('Markdown files downloaded!', {
+                  description: `Exported ${notes.length} notes as .md files`,
+                });
+              } catch (error) {
+                toast.error('Failed to export markdown', {
+                  description: error instanceof Error ? error.message : 'Unknown error',
+                });
+              }
+            }}
+            disabled={stats.noteCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileText className="w-4 h-4" />
+            Export as Markdown
+          </button>
+        </div>
         {stats.noteCount === 0 && (
           <p className="text-xs text-muted-foreground">
             No data to export. Create some notes first.
