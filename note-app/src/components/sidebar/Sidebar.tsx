@@ -1,15 +1,15 @@
-import { useState } from 'react';
 import { useAppStore } from '../../stores/useAppStore.js';
 import { PlusCircle, Moon, Sun, Settings, PanelLeftClose } from 'lucide-react';
 import { Search } from './Search.js';
 import { Folders } from './Folders.js';
 import { Tags } from './Tags.js';
-import { NotesList } from './NotesList.js';
-import { SettingsModal } from '../settings/SettingsModal.js';
 
-export function Sidebar() {
+interface SidebarProps {
+  onOpenSettings: () => void;
+}
+
+export function Sidebar({ onOpenSettings }: SidebarProps) {
   const { createNote, selectedFolderId, theme, toggleTheme, toggleSidebar } = useAppStore();
-  const [showSettings, setShowSettings] = useState(false);
 
   const handleNewNote = () => {
     createNote(selectedFolderId);
@@ -29,9 +29,9 @@ export function Sidebar() {
             <PanelLeftClose className="w-5 h-5" />
           </button>
           <button
-            onClick={() => setShowSettings(true)}
+            onClick={onOpenSettings}
             className="p-2 hover:bg-accent rounded transition-colors"
-            title="Settings"
+            title="Settings (Ctrl+,)"
           >
             <Settings className="w-5 h-5" />
           </button>
@@ -62,9 +62,6 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto">
         <Folders />
       </div>
-
-      {/* Settings Modal */}
-      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }

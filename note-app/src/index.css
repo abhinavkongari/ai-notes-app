@@ -166,3 +166,31 @@
 .ProseMirror table .column-resize-handle:hover {
   @apply bg-primary;
 }
+
+/* Wiki Link Styles */
+.ProseMirror [data-wiki-link] {
+  @apply text-primary underline cursor-pointer;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.ProseMirror [data-wiki-link]:hover {
+  @apply bg-primary/10 rounded px-0.5;
+}
+
+.wiki-link-suggestion-trigger {
+  @apply text-primary;
+}
+
+.wiki-link-decoration {
+  @apply text-primary underline cursor-pointer;
+  text-decoration-style: dotted;
+}
+
+/* Focus mode styling */
+.focus-mode-content .ProseMirror {
+  min-height: 70vh;
+  font-size: 1.125rem;
+  line-height: 1.8;
+}

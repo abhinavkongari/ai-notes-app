@@ -14,6 +14,7 @@ export interface Folder {
   name: string;
   parentId: string | null;
   color?: string;
+  icon?: string;
   createdAt: number;
 }
 
@@ -30,6 +31,10 @@ export interface AISettings {
   enabled: boolean;
 }
 
+export type DateFilter = 'all' | 'today' | 'week' | 'month' | 'year';
+export type SortOption = 'modified-desc' | 'modified-asc' | 'created-desc' | 'created-asc' | 'title-asc' | 'title-desc';
+export type ViewDensity = 'compact' | 'comfortable';
+
 export interface AppState {
   notes: Note[];
   folders: Folder[];
@@ -38,6 +43,10 @@ export interface AppState {
   searchQuery: string;
   selectedFolderId: string | null;
   selectedTags: string[];
+  dateFilter: DateFilter;
+  sortOption: SortOption;
+  viewDensity: ViewDensity;
+  showSnippets: boolean;
   theme: 'light' | 'dark';
   sidebarVisible: boolean;
   focusMode: boolean;

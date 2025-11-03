@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, Languages, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '../../stores/useAppStore.js';
 import * as aiService from '../../lib/aiService';
 import type { AIError } from '../../lib/aiService';
+import { AIResultModal } from './AIResultModal.js';
 
 interface AIAssistantProps {
   editor: Editor | null;
@@ -15,6 +16,22 @@ export function AIAssistant({ editor }: AIAssistantProps) {
   const { aiSettings } = useAppStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentAction, setCurrentAction] = useState<string | null>(null);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [resultText, setResultText] = useState('');
+  const [originalText, setOriginalText] = useState('');
+  const [lastAction, setLastAction] = useState<(() => Promise<void>) | null>(null);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (languageMenuRef.current && !languageMenuRef.current.contains(e.target as Node)) {
+        setShowLanguageMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (!editor || !aiSettings.enabled) {
     return null;
@@ -37,7 +54,8 @@ export function AIAssistant({ editor }: AIAssistantProps) {
 
   const handleAIAction = async (
     action: string,
-    aiFunction: (text: string) => Promise<string>
+    aiFunction: (text: string) => Promise<string>,
+    showModal = true
   ) => {
     const selectedText = getSelectedText();
 
@@ -51,7 +69,6 @@ export function AIAssistant({ editor }: AIAssistantProps) {
         action: {
           label: 'Open Settings',
           onClick: () => {
-            // This will be handled by parent component
             document.querySelector<HTMLButtonElement>('[title="Settings"]')?.click();
           },
         },
@@ -64,8 +81,18 @@ export function AIAssistant({ editor }: AIAssistantProps) {
 
     try {
       const result = await aiFunction(selectedText);
-      replaceSelection(result);
-      toast.success(`${action} complete!`);
+      
+      if (showModal) {
+        setOriginalText(selectedText);
+        setResultText(result);
+        setShowResultModal(true);
+        setLastAction(() => async () => {
+          await handleAIAction(action, aiFunction, true);
+        });
+      } else {
+        replaceSelection(result);
+        toast.success(`${action} complete!`);
+      }
     } catch (error) {
       const aiError = error as AIError;
 
@@ -96,36 +123,72 @@ export function AIAssistant({ editor }: AIAssistantProps) {
     }
   };
 
+  const handleAcceptResult = () => {
+    replaceSelection(resultText);
+    setShowResultModal(false);
+    toast.success('Changes applied!');
+  };
+
+  const handleRetry = async () => {
+    setShowResultModal(false);
+    if (lastAction) {
+      await lastAction();
+    }
+  };
+
+  const handleTranslate = (language: string) => {
+    handleAIAction(
+      `Translate to ${language.charAt(0).toUpperCase() + language.slice(1)}`,
+      (text) => aiService.translateText(text, language),
+      true
+    );
+    setShowLanguageMenu(false);
+  };
+
+  const languages = [
+    { code: 'spanish', label: 'Spanish' },
+    { code: 'french', label: 'French' },
+    { code: 'german', label: 'German' },
+    { code: 'chinese', label: 'Chinese' },
+    { code: 'japanese', label: 'Japanese' },
+    { code: 'hindi', label: 'Hindi' },
+    { code: 'italian', label: 'Italian' },
+    { code: 'portuguese', label: 'Portuguese' },
+    { code: 'russian', label: 'Russian' },
+    { code: 'legal', label: 'Legal Language' },
+    { code: 'medical', label: 'Medical Language' },
+  ];
+
   const aiActions = [
     {
-      label: 'Improve Writing',
+      label: 'Improve',
       description: 'Enhance clarity and flow',
       action: () => handleAIAction('Improve Writing', aiService.improveWriting),
     },
     {
-      label: 'Fix Grammar',
+      label: 'Grammar',
       description: 'Correct errors',
       action: () => handleAIAction('Fix Grammar', aiService.fixGrammar),
     },
     {
-      label: 'Make Shorter',
+      label: 'Shorter',
       description: 'Condense text',
       action: () => handleAIAction('Make Shorter', aiService.makeShorter),
     },
     {
-      label: 'Make Longer',
+      label: 'Longer',
       description: 'Expand with details',
       action: () => handleAIAction('Make Longer', aiService.makeLonger),
     },
     {
-      label: 'Professional Tone',
-      description: 'Make it formal',
-      action: () => handleAIAction('Professional Tone', (text) => aiService.changeTone(text, 'professional')),
+      label: 'Simplify',
+      description: 'Make easier to understand',
+      action: () => handleAIAction('Simplify', aiService.simplifyText),
     },
     {
-      label: 'Casual Tone',
-      description: 'Make it relaxed',
-      action: () => handleAIAction('Casual Tone', (text) => aiService.changeTone(text, 'casual')),
+      label: 'Professional',
+      description: 'Make it formal',
+      action: () => handleAIAction('Professional Tone', (text) => aiService.changeTone(text, 'professional')),
     },
   ];
 
@@ -143,7 +206,7 @@ export function AIAssistant({ editor }: AIAssistantProps) {
         }}
       >
         <div className="flex items-center gap-1 bg-background border border-border rounded-lg shadow-lg p-1">
-          <div className="flex items-center gap-0.5 px-1 border-r border-border">
+          <div className="flex items-center gap-0.5 px-2 border-r border-border">
             <Sparkles className="w-3 h-3 text-primary" />
             <span className="text-xs font-medium text-muted-foreground">AI</span>
           </div>
@@ -159,6 +222,33 @@ export function AIAssistant({ editor }: AIAssistantProps) {
               {item.label}
             </button>
           ))}
+
+          {/* Translate with Language Menu */}
+          <div className="relative" ref={languageMenuRef}>
+            <button
+              onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+              disabled={isProcessing}
+              className="px-2 py-1.5 text-xs hover:bg-accent rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
+              title="Translate to another language"
+            >
+              <Languages className="w-3 h-3" />
+              Translate
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {showLanguageMenu && (
+              <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[160px] py-1">
+                {languages.map(lang => (
+                  <button
+                    key={lang.code}
+                    onClick={() => handleTranslate(lang.code)}
+                    className="w-full flex items-center px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </BubbleMenu>
 
@@ -171,6 +261,17 @@ export function AIAssistant({ editor }: AIAssistantProps) {
           </span>
         </div>
       )}
+
+      {/* Result Modal */}
+      <AIResultModal
+        isOpen={showResultModal}
+        onClose={() => setShowResultModal(false)}
+        originalText={originalText}
+        resultText={resultText}
+        actionName={currentAction || 'AI'}
+        onAccept={handleAcceptResult}
+        onRetry={handleRetry}
+      />
     </>
   );
 }

@@ -240,6 +240,51 @@ Match the style and tone of the existing text. Write 1-2 sentences that naturall
 }
 
 /**
+ * Simplify the text to make it easier to understand
+ */
+export async function simplifyText(text: string): Promise<string> {
+  const systemMessage = `You are a simplification assistant. Rewrite the given text to make it easier to understand.
+Use simple words, short sentences, and clear structure. Avoid jargon and complex terms. Return only the simplified text, nothing else.`;
+
+  return callAI(text, systemMessage, { maxTokens: Math.ceil(text.length * 1.2) });
+}
+
+/**
+ * Translate text to another language
+ */
+export async function translateText(text: string, targetLanguage: string): Promise<string> {
+  const languageMap: Record<string, string> = {
+    spanish: 'Spanish',
+    french: 'French',
+    german: 'German',
+    chinese: 'Simplified Chinese',
+    japanese: 'Japanese',
+    hindi: 'Hindi',
+    italian: 'Italian',
+    portuguese: 'Portuguese',
+    russian: 'Russian',
+    legal: 'formal legal language with appropriate terminology',
+    medical: 'medical terminology with appropriate clinical language',
+  };
+
+  const language = languageMap[targetLanguage.toLowerCase()] || targetLanguage;
+  
+  // Special handling for Legal and Medical language
+  const targetLower = targetLanguage.toLowerCase();
+  let systemMessage: string;
+  
+  if (targetLower === 'legal') {
+    systemMessage = `You are a legal writing assistant. Rewrite the given text in formal legal language with appropriate legal terminology and structure. Maintain accuracy and clarity. Return only the legal version, nothing else.`;
+  } else if (targetLower === 'medical') {
+    systemMessage = `You are a medical writing assistant. Rewrite the given text using appropriate medical terminology and clinical language. Use precise medical terms, maintain professional tone, and ensure accuracy. Return only the medical version, nothing else.`;
+  } else {
+    systemMessage = `You are a translation assistant. Translate the given text to ${language}. Maintain the meaning, tone, and style. Return only the translated text, nothing else.`;
+  }
+
+  return callAI(text, systemMessage, { maxTokens: Math.ceil(text.length * 2) });
+}
+
+/**
  * Test the API connection
  */
 export async function testConnection(): Promise<boolean> {

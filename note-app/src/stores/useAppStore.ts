@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Note, Folder, Tag, AppState } from '../types/index.js';
+import type { Note, Folder, Tag, AppState, DateFilter, SortOption, ViewDensity } from '../types/index.js';
 import * as db from '../lib/db.js';
 
 interface AppStore extends AppState {
@@ -20,12 +20,20 @@ interface AppStore extends AppState {
 
   // Tag actions
   createTag: (name: string) => Promise<Tag>;
+  renameTag: (id: string, newName: string) => Promise<void>;
+  mergeTag: (sourceId: string, targetId: string) => Promise<void>;
   deleteTag: (id: string) => Promise<void>;
   toggleTagFilter: (tagName: string) => void;
   clearTagFilters: () => void;
 
   // Search actions
   setSearchQuery: (query: string) => void;
+  setDateFilter: (filter: DateFilter) => void;
+  
+  // View actions
+  setSortOption: (option: SortOption) => void;
+  setViewDensity: (density: ViewDensity) => void;
+  toggleShowSnippets: () => void;
 
   // Theme actions
   toggleTheme: () => void;
@@ -78,6 +86,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   searchQuery: '',
   selectedFolderId: null,
   selectedTags: [],
+  dateFilter: 'all',
+  sortOption: 'modified-desc',
+  viewDensity: 'comfortable',
+  showSnippets: true,
   theme: 'light',
   sidebarVisible: true,
   focusMode: false,
@@ -141,8 +153,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     await db.saveNote(updatedNote);
     set(state => ({
-      notes: state.notes.map(n => (n.id === id ? updatedNote : n))
-        .sort((a, b) => b.updatedAt - a.updatedAt),
+      notes: state.notes.map(n => (n.id === id ? updatedNote : n)),
     }));
   },
 
@@ -237,6 +248,78 @@ export const useAppStore = create<AppStore>((set, get) => ({
     return tag;
   },
 
+  renameTag: async (id, newName) => {
+    const tag = get().tags.find(t => t.id === id);
+    if (!tag) return;
+
+    const oldName = tag.name;
+    
+    // Check if new name already exists (different tag)
+    const existing = get().tags.find(t => t.id !== id && t.name.toLowerCase() === newName.toLowerCase());
+    if (existing) {
+      throw new Error('A tag with this name already exists');
+    }
+
+    // Update tag name
+    const updatedTag = { ...tag, name: newName };
+    await db.saveTag(updatedTag);
+
+    // Update tag name in all notes
+    const notesToUpdate = get().notes.filter(n => n.tags.includes(oldName));
+    await Promise.all(
+      notesToUpdate.map(note =>
+        db.saveNote({ 
+          ...note, 
+          tags: note.tags.map(t => t === oldName ? newName : t) 
+        })
+      )
+    );
+
+    set(state => ({
+      tags: state.tags.map(t => t.id === id ? updatedTag : t),
+      notes: state.notes.map(n => ({
+        ...n,
+        tags: n.tags.map(t => t === oldName ? newName : t),
+      })),
+      selectedTags: state.selectedTags.map(t => t === oldName ? newName : t),
+    }));
+  },
+
+  mergeTag: async (sourceId, targetId) => {
+    const sourceTag = get().tags.find(t => t.id === sourceId);
+    const targetTag = get().tags.find(t => t.id === targetId);
+    if (!sourceTag || !targetTag) return;
+
+    const sourceName = sourceTag.name;
+    const targetName = targetTag.name;
+
+    // Update all notes: replace source tag with target tag
+    const notesToUpdate = get().notes.filter(n => n.tags.includes(sourceName));
+    await Promise.all(
+      notesToUpdate.map(note => {
+        const newTags = note.tags
+          .map(t => t === sourceName ? targetName : t)
+          .filter((t, i, arr) => arr.indexOf(t) === i); // Remove duplicates
+        return db.saveNote({ ...note, tags: newTags });
+      })
+    );
+
+    // Delete source tag
+    await db.deleteTag(sourceId);
+
+    set(state => ({
+      tags: state.tags.filter(t => t.id !== sourceId),
+      notes: state.notes.map(n => {
+        if (!n.tags.includes(sourceName)) return n;
+        const newTags = n.tags
+          .map(t => t === sourceName ? targetName : t)
+          .filter((t, i, arr) => arr.indexOf(t) === i);
+        return { ...n, tags: newTags };
+      }),
+      selectedTags: state.selectedTags.filter(t => t !== sourceName),
+    }));
+  },
+
   deleteTag: async (id) => {
     const tagName = get().tags.find(t => t.id === id)?.name;
     if (!tagName) return;
@@ -276,6 +359,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // Search actions
   setSearchQuery: (query) => {
     set({ searchQuery: query });
+  },
+
+  setDateFilter: (filter) => {
+    set({ dateFilter: filter });
+  },
+  
+  // View actions
+  setSortOption: (option) => {
+    set({ sortOption: option });
+    localStorage.setItem('sortOption', option);
+  },
+  
+  setViewDensity: (density) => {
+    set({ viewDensity: density });
+    localStorage.setItem('viewDensity', density);
+  },
+  
+  toggleShowSnippets: () => {
+    set(state => {
+      const newValue = !state.showSnippets;
+      localStorage.setItem('showSnippets', String(newValue));
+      return { showSnippets: newValue };
+    });
   },
 
   // Theme actions
@@ -364,7 +470,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // Computed getters
   getFilteredNotes: () => {
-    const { notes, selectedFolderId, selectedTags, searchQuery } = get();
+    const { notes, selectedFolderId, selectedTags, searchQuery, dateFilter, sortOption } = get();
 
     let filtered = notes;
 
@@ -380,6 +486,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
       );
     }
 
+    // Filter by date
+    if (dateFilter !== 'all') {
+      const now = Date.now();
+      const day = 24 * 60 * 60 * 1000;
+      let cutoff = now;
+
+      switch (dateFilter) {
+        case 'today':
+          cutoff = now - day;
+          break;
+        case 'week':
+          cutoff = now - (7 * day);
+          break;
+        case 'month':
+          cutoff = now - (30 * day);
+          break;
+        case 'year':
+          cutoff = now - (365 * day);
+          break;
+      }
+
+      filtered = filtered.filter(n => n.updatedAt >= cutoff);
+    }
+
     // Filter by search query
     if (searchQuery.trim()) {
       const lowerQuery = searchQuery.toLowerCase();
@@ -388,6 +518,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
         n.content.toLowerCase().includes(lowerQuery)
       );
     }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortOption) {
+        case 'modified-desc':
+          return b.updatedAt - a.updatedAt;
+        case 'modified-asc':
+          return a.updatedAt - b.updatedAt;
+        case 'created-desc':
+          return b.createdAt - a.createdAt;
+        case 'created-asc':
+          return a.createdAt - b.createdAt;
+        case 'title-asc':
+          return a.title.localeCompare(b.title);
+        case 'title-desc':
+          return b.title.localeCompare(a.title);
+        default:
+          return 0;
+      }
+    });
 
     return filtered;
   },

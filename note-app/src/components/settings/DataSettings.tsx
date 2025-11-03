@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Download, Upload, Database, AlertCircle, CheckCircle2, FileJson, Loader2, FileText } from 'lucide-react';
+import { Upload, Database, AlertCircle, CheckCircle2, FileJson, Loader2, FileText, FileArchive } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 import {
   exportAllData,
@@ -11,17 +11,18 @@ import {
   type BackupData,
   type ImportOptions,
 } from '../../lib/backup';
-import { exportNotesAsMarkdown, exportAsJSON } from '../../lib/export';
+import { exportNotesAsMarkdown, exportNotesAsZip, importMarkdownFile } from '../../lib/export';
 import { toast } from 'sonner';
 
 export function DataSettings() {
-  const { notes, folders, tags } = useAppStore();
+  const { notes, folders, tags, createNote } = useAppStore();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importMode, setImportMode] = useState<ImportOptions['mode']>('merge');
   const [duplicateHandling, setDuplicateHandling] = useState<ImportOptions['handleDuplicates']>('skip');
   const [importPreview, setImportPreview] = useState<BackupData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const markdownInputRef = useRef<HTMLInputElement>(null);
 
   // Get current data stats
   const stats = getBackupStats(notes, folders, tags);
@@ -135,6 +136,51 @@ export function DataSettings() {
     setImportPreview(null);
   };
 
+  const handleMarkdownImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setIsImporting(true);
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const file of Array.from(files)) {
+        try {
+          const noteData = await importMarkdownFile(file);
+          await createNote(null);
+          // Get the note we just created and update it with the markdown data
+          const { notes: currentNotes, updateNote } = useAppStore.getState();
+          const newNote = currentNotes[0]; // Most recent note
+          if (newNote) {
+            await updateNote(newNote.id, noteData);
+            successCount++;
+          }
+        } catch (error) {
+          console.error('Failed to import markdown file:', file.name, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Imported ${successCount} markdown file${successCount > 1 ? 's' : ''}`, {
+          description: errorCount > 0 ? `${errorCount} file${errorCount > 1 ? 's' : ''} failed to import` : undefined,
+        });
+      } else {
+        toast.error('Failed to import markdown files');
+      }
+    } catch (error) {
+      toast.error('Import failed', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsImporting(false);
+      if (markdownInputRef.current) {
+        markdownInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -216,6 +262,28 @@ export function DataSettings() {
             <FileText className="w-4 h-4" />
             Export as Markdown
           </button>
+          <button
+            onClick={async () => {
+              try {
+                setIsExporting(true);
+                await exportNotesAsZip(notes, folders);
+                toast.success('ZIP archive downloaded!', {
+                  description: `Exported ${notes.length} notes in organized folders`,
+                });
+              } catch (error) {
+                toast.error('Failed to export ZIP', {
+                  description: error instanceof Error ? error.message : 'Unknown error',
+                });
+              } finally {
+                setIsExporting(false);
+              }
+            }}
+            disabled={stats.noteCount === 0 || isExporting}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileArchive className="w-4 h-4" />
+            Export as ZIP
+          </button>
         </div>
         {stats.noteCount === 0 && (
           <p className="text-xs text-muted-foreground">
@@ -270,7 +338,7 @@ export function DataSettings() {
             )}
           </div>
 
-          {/* File Input */}
+          {/* File Inputs */}
           <input
             ref={fileInputRef}
             type="file"
@@ -278,24 +346,42 @@ export function DataSettings() {
             onChange={handleFileSelect}
             className="hidden"
           />
+          <input
+            ref={markdownInputRef}
+            type="file"
+            accept=".md,.markdown,text/markdown"
+            multiple
+            onChange={handleMarkdownImport}
+            className="hidden"
+          />
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isImporting}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isImporting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Reading file...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4" />
-                Choose Backup File
-              </>
-            )}
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImporting}
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Reading file...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Import JSON Backup
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => markdownInputRef.current?.click()}
+              disabled={isImporting}
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileText className="w-4 h-4" />
+              Import Markdown Files
+            </button>
+          </div>
         </div>
       ) : (
         /* Import Preview */

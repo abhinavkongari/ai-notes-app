@@ -4,10 +4,14 @@ import {
   Bold,
   Italic,
   Strikethrough,
+  Underline as UnderlineIcon,
   Code,
   Heading1,
   Heading2,
   Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
   List,
   ListOrdered,
   ListTodo,
@@ -20,6 +24,14 @@ import {
   Table,
   Smile,
   Trash2,
+  Star,
+  RemoveFormatting,
+  Info,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore.js';
 import { toast } from 'sonner';
@@ -31,9 +43,41 @@ interface EditorToolbarProps {
 const COMMON_EMOJIS = ['😀', '😂', '❤️', '👍', '🎉', '🔥', '✨', '💡', '📝', '✅', '❌', '⚠️', '📌', '🚀', '💪', '🌟'];
 
 export function EditorToolbar({ editor }: EditorToolbarProps) {
-  const { currentNoteId, deleteNote } = useAppStore();
+  const { currentNoteId, notes, deleteNote, updateNote } = useAppStore();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  
+  const [showCalloutMenu, setShowCalloutMenu] = useState(false);
+
+  const currentNote = notes.find(n => n.id === currentNoteId);
+
+  const handleImageUpload = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image size must be less than 10MB');
+        return;
+      }
+
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        editor?.chain().focus().setImage({ src: base64 }).run();
+        toast.success('Image inserted');
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read image');
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
   if (!editor) return null;
 
   const handleDeleteNote = () => {
@@ -42,6 +86,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       deleteNote(currentNoteId);
       toast.success('Note deleted');
     }
+  };
+
+  const handleToggleFavorite = () => {
+    if (!currentNoteId || !currentNote) return;
+    updateNote(currentNoteId, { isFavorite: !currentNote.isFavorite });
+    toast.success(currentNote.isFavorite ? 'Removed from favorites' : 'Added to favorites');
   };
 
   const insertEmoji = (emoji: string) => {
@@ -112,6 +162,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             <Italic className="w-4 h-4" />
           </ToolbarButton>
           <ToolbarButton
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            isActive={editor.isActive('underline')}
+            title="Underline (Ctrl+U)"
+          >
+            <UnderlineIcon className="w-4 h-4" />
+          </ToolbarButton>
+          <ToolbarButton
             onClick={() => editor.chain().focus().toggleStrike().run()}
             isActive={editor.isActive('strike')}
             title="Strikethrough"
@@ -131,6 +188,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             title="Highlight"
           >
             <Highlighter className="w-4 h-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor.chain().focus().unsetAllMarks().run()}
+            title="Clear Formatting"
+          >
+            <RemoveFormatting className="w-4 h-4" />
           </ToolbarButton>
         </div>
 
@@ -156,6 +219,27 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             title="Heading 3"
           >
             <Heading3 className="w-4 h-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
+            isActive={editor.isActive('heading', { level: 4 })}
+            title="Heading 4"
+          >
+            <Heading4 className="w-3.5 h-3.5" />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor.chain().focus().toggleHeading({ level: 5 }).run()}
+            isActive={editor.isActive('heading', { level: 5 })}
+            title="Heading 5"
+          >
+            <Heading5 className="w-3.5 h-3.5" />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor.chain().focus().toggleHeading({ level: 6 }).run()}
+            isActive={editor.isActive('heading', { level: 6 })}
+            title="Heading 6"
+          >
+            <Heading6 className="w-3.5 h-3.5" />
           </ToolbarButton>
         </div>
 
@@ -206,16 +290,130 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           >
             <Minus className="w-4 h-4" />
           </ToolbarButton>
+          
+          {/* Callout Dropdown */}
+          <div className="relative">
+            <ToolbarButton
+              onClick={() => setShowCalloutMenu(!showCalloutMenu)}
+              isActive={editor.isActive('callout')}
+              title="Insert Callout"
+            >
+              <Info className="w-4 h-4" />
+              <ChevronDown className="w-3 h-3" />
+            </ToolbarButton>
+            {showCalloutMenu && (
+              <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[160px] py-1">
+                <button
+                  onClick={() => {
+                    editor.chain().focus().setCallout('info').run();
+                    setShowCalloutMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                >
+                  <Info className="w-4 h-4 text-blue-500" />
+                  Info
+                </button>
+                <button
+                  onClick={() => {
+                    editor.chain().focus().setCallout('warning').run();
+                    setShowCalloutMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                >
+                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                  Warning
+                </button>
+                <button
+                  onClick={() => {
+                    editor.chain().focus().setCallout('success').run();
+                    setShowCalloutMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                >
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  Success
+                </button>
+                <button
+                  onClick={() => {
+                    editor.chain().focus().setCallout('error').run();
+                    setShowCalloutMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                >
+                  <XCircle className="w-4 h-4 text-red-500" />
+                  Error
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Media */}
+        <div className="flex items-center gap-1 pr-2 border-r border-border">
+          <ToolbarButton
+            onClick={handleImageUpload}
+            title="Insert Image"
+          >
+            <ImageIcon className="w-4 h-4" />
+          </ToolbarButton>
         </div>
 
         {/* Table */}
         <div className="flex items-center gap-1 pr-2 border-r border-border">
           <ToolbarButton
             onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-            title="Insert Table"
+            title="Insert Table (3x3)"
           >
             <Table className="w-4 h-4" />
           </ToolbarButton>
+
+          {/* Table controls - only show when inside a table */}
+          {editor.isActive('table') && (
+            <>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().addRowBefore().run()}
+                title="Add Row Above"
+              >
+                <span className="text-xs font-bold">+↑</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().addRowAfter().run()}
+                title="Add Row Below"
+              >
+                <span className="text-xs font-bold">+↓</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().addColumnBefore().run()}
+                title="Add Column Left"
+              >
+                <span className="text-xs font-bold">+←</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().addColumnAfter().run()}
+                title="Add Column Right"
+              >
+                <span className="text-xs font-bold">+→</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().deleteRow().run()}
+                title="Delete Row"
+              >
+                <span className="text-xs font-bold text-destructive">-↕</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().deleteColumn().run()}
+                title="Delete Column"
+              >
+                <span className="text-xs font-bold text-destructive">-↔</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().deleteTable().run()}
+                title="Delete Table"
+              >
+                <Trash2 className="w-3 h-3 text-destructive" />
+              </ToolbarButton>
+            </>
+          )}
         </div>
 
         {/* Emoji */}
@@ -228,12 +426,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             <Smile className="w-4 h-4" />
           </ToolbarButton>
           {showEmojiPicker && (
-            <div className="absolute top-full left-0 mt-1 p-2 bg-background border border-border rounded-lg shadow-lg z-50 grid grid-cols-8 gap-1">
+            <div className="absolute top-full left-0 mt-1 p-3 bg-background border border-border rounded-lg shadow-lg z-50 grid grid-cols-8 gap-2 min-w-[280px]">
               {COMMON_EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
                   onClick={() => insertEmoji(emoji)}
-                  className="text-xl hover:bg-accent rounded p-1 transition-colors"
+                  className="text-2xl hover:bg-accent rounded p-2 transition-colors w-10 h-10 flex items-center justify-center"
                   title={emoji}
                 >
                   {emoji}
@@ -243,8 +441,15 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           )}
         </div>
 
-        {/* Delete Note */}
+        {/* Note Actions */}
         <div className="flex items-center gap-1 ml-auto">
+          <ToolbarButton
+            onClick={handleToggleFavorite}
+            isActive={currentNote?.isFavorite}
+            title={currentNote?.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Star className={`w-4 h-4 ${currentNote?.isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+          </ToolbarButton>
           <ToolbarButton
             onClick={handleDeleteNote}
             title="Delete Note"
