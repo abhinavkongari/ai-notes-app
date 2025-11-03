@@ -112,8 +112,125 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     set({ notes, folders, tags });
 
-    // Set first note as current if none selected
-    if (notes.length > 0 && !get().currentNoteId) {
+    // Create welcome note for first-time users
+    if (notes.length === 0) {
+      const now = Date.now();
+      const welcomeNote: Note = {
+        id: generateId(),
+        title: 'Welcome to AI Notes! 🎉',
+        content: `<h1>Welcome to AI Notes! 🎉</h1>
+<p>Thank you for trying out AI Notes! This is your <strong>example note</strong> that will help you get started. You can edit or delete this note anytime.</p>
+
+<h2>📝 Getting Started</h2>
+<p>Start creating your first note by clicking the <strong>"New Note"</strong> button or pressing <code>Ctrl+N</code>. Your notes are automatically saved as you type!</p>
+
+<h2>✍️ Rich Text Editing</h2>
+<p>This editor supports <em>powerful formatting</em>:</p>
+<ul>
+<li><strong>Formatting:</strong> <strong>Bold</strong>, <em>Italic</em>, <u>Underline</u>, <s>Strikethrough</s></li>
+<li><strong>Headings:</strong> Use headings (H1-H6) to organize your content</li>
+<li><strong>Lists:</strong> Bullet lists, numbered lists, and task lists with checkboxes</li>
+<li><strong>Code:</strong> Inline <code>code</code> and code blocks</li>
+<li><strong>Images:</strong> Upload, drag & drop, or paste images</li>
+<li><strong>Tables:</strong> Insert tables from the toolbar</li>
+<li><strong>Callouts:</strong> Highlight important information with colored callout boxes</li>
+</ul>
+
+<h2>📁 Organization</h2>
+<p>Keep your notes organized:</p>
+<ul>
+<li><strong>Folders:</strong> Create folders with custom colors and icons to group related notes</li>
+<li><strong>Tags:</strong> Add tags to your notes for flexible categorization</li>
+<li><strong>Favorites:</strong> Star important notes to quickly access them</li>
+</ul>
+
+<h2>🔗 Wiki-Style Links</h2>
+<p>Connect your notes together! Type <code>[[</code> to create a link to another note. For example, <code>[[My Next Note]]</code> will link to a note titled "My Next Note".</p>
+<p>You can see backlinks at the bottom of notes that link to the current note.</p>
+
+<h2>🤖 AI Features</h2>
+<p>Enhance your writing with AI assistance:</p>
+<ul>
+<li><strong>Improve Writing:</strong> Make your text clearer and more polished</li>
+<li><strong>Fix Grammar:</strong> Correct grammatical errors</li>
+<li><strong>Adjust Length:</strong> Make text shorter or longer</li>
+<li><strong>Simplify:</strong> Simplify complex language</li>
+<li><strong>Professional Tone:</strong> Make your writing more formal</li>
+<li><strong>Translate:</strong> Translate to 9+ languages</li>
+<li><strong>Summarize:</strong> Get summaries of your notes</li>
+</ul>
+<p><em>Note: You'll need to add your OpenAI API key in Settings (Ctrl+,) to use AI features.</em></p>
+
+<h2>⌨️ Keyboard Shortcuts</h2>
+<p>Work faster with these shortcuts:</p>
+<ul>
+<li><strong>Ctrl+N</strong> - Create a new note</li>
+<li><strong>Ctrl+F</strong> - Focus search</li>
+<li><strong>Ctrl+S</strong> - Save now</li>
+<li><strong>Ctrl+K</strong> - Open command palette</li>
+<li><strong>Ctrl+,</strong> - Open settings</li>
+<li><strong>Ctrl+B</strong> - Toggle sidebar</li>
+<li><strong>Ctrl+/</strong> or <strong>?</strong> - Show all shortcuts</li>
+</ul>
+
+<h2>🔍 Search & Filter</h2>
+<p>Quickly find what you need:</p>
+<ul>
+<li><strong>Search:</strong> Use the search bar to find notes by title or content</li>
+<li><strong>Filters:</strong> Filter by folders, tags, or date ranges</li>
+<li><strong>Sort:</strong> Sort notes by date, title, or creation time</li>
+</ul>
+
+<h2>🌓 Themes & Focus Mode</h2>
+<p>Customize your experience:</p>
+<ul>
+<li><strong>Theme:</strong> Switch between light and dark themes</li>
+<li><strong>Focus Mode:</strong> Hide distractions for focused writing</li>
+<li><strong>View Density:</strong> Choose compact or comfortable view</li>
+</ul>
+
+<h2>📱 Progressive Web App</h2>
+<p>This app works offline! Install it as a PWA to use it like a native app on your device.</p>
+
+<h2>💾 Data & Privacy</h2>
+<p>All your data is stored <strong>locally</strong> on your device using IndexedDB. Your notes never leave your computer unless you explicitly export them.</p>
+<p>You can export your notes as Markdown or JSON from the Settings menu.</p>
+
+<h2>🎯 Ready to Start?</h2>
+<p>Now that you know the basics, try creating your first note! This welcome note will always be here, but you can delete it if you'd like.</p>
+<p>Happy note-taking! ✨</p>`,
+        folderId: null,
+        tags: ['welcome', 'getting-started'],
+        createdAt: now,
+        updatedAt: now,
+        isFavorite: true,
+      };
+
+      // Save welcome note to database
+      await db.saveNote(welcomeNote);
+      
+      // Create welcome tag if it doesn't exist
+      const welcomeTag: Tag = {
+        id: generateId(),
+        name: 'welcome',
+        createdAt: now,
+      };
+      const gettingStartedTag: Tag = {
+        id: generateId(),
+        name: 'getting-started',
+        createdAt: now,
+      };
+      await db.saveTag(welcomeTag);
+      await db.saveTag(gettingStartedTag);
+
+      // Update state with welcome note
+      set(state => ({
+        notes: [welcomeNote, ...state.notes],
+        tags: [...state.tags, welcomeTag, gettingStartedTag],
+        currentNoteId: welcomeNote.id,
+      }));
+    } else if (notes.length > 0 && !get().currentNoteId) {
+      // Set first note as current if none selected (for existing users)
       set({ currentNoteId: notes[0].id });
     }
   },
